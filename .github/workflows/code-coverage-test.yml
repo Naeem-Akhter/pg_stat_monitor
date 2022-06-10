@@ -92,6 +92,7 @@ jobs:
           make installcheck
           /usr/lib/postgresql/14/bin/psql -d postgres -p 5432 -c "\list"
           make coverage
+          sudo chmod ugo+rwx *.gcov*
           ls -l ../../
           ls -l
         working-directory: src/pg_stat_monitor/
@@ -99,7 +100,8 @@ jobs:
       - name: Upload
         uses: codecov/codecov-action@v2
         with:
-          files: ./src/pg_stat_monitor/pg_stat_monitor.c.gcov ./src/pg_stat_monitor/hash_query.c.gcov ./src/pg_stat_monitor/guc.c.gcov
+          verbose: true
+          files: ./src/pg_stat_monitor/pg_stat_monitor.c.gcov,./src/pg_stat_monitor/hash_query.c.gcov,./src/pg_stat_monitor/guc.c.gcov
 
       - name: Change dir permissions on fail
         if: ${{ failure() }}
