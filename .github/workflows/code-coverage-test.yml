@@ -97,7 +97,7 @@ jobs:
       - name: Upload
         uses: codecov/codecov-action@v2
         with:
-          files: ./pg_stat_monitor.c.gcov ./hash_query.c.gcov ./guc.c.gcov
+          files: ./src/pg_stat_monitor/pg_stat_monitor.c.gcov ./src/pg_stat_monitor/hash_query.c.gcov ./src/pg_stat_monitor/guc.c.gcov
 
       - name: Change dir permissions on fail
         if: ${{ failure() }}
