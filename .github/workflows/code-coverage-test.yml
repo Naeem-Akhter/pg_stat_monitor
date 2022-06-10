@@ -96,12 +96,13 @@ jobs:
         run: |
           make installcheck
           /usr/lib/postgresql/14/bin/psql -d postgres -p 5432 -c "\list"
-          make coverage-html
-          lcov --capture --directory . --output-file coverage/lcov.info
-          pip install cpp-coveralls
-          export COVERALLS_REPO_TOKEN="${{ secrets.COVERALL_PG_STAT_MONITOR_TOKEN }}"
-          coveralls --verbose
+          make coverage
         working-directory: src/pg_stat_monitor/
+
+      - name: Upload
+        uses: codecov/codecov-action@v2
+        with:
+          files: ./pg_stat_monitor.c.gcov ./hash_query.c.gcov ./guc.c.gcov
 
       - name: Change dir permissions on fail
         if: ${{ failure() }}
