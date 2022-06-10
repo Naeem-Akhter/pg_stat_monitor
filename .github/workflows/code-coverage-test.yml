@@ -92,6 +92,8 @@ jobs:
           make installcheck
           /usr/lib/postgresql/14/bin/psql -d postgres -p 5432 -c "\list"
           make coverage
+          ls -l ../../
+          ls -l
         working-directory: src/pg_stat_monitor/
 
       - name: Upload
