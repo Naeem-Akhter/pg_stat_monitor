@@ -4,7 +4,9 @@
 
 [![postgresql-11-build](https://github.com/percona/pg_stat_monitor/actions/workflows/postgresql-11-build.yml/badge.svg?branch=REL_1_STABLE)](https://github.com/percona/pg_stat_monitor/actions/workflows/postgresql-11-build.yml)
 
-[![Coverage Status](https://coveralls.io/repos/github/percona/pg_stat_monitor/badge.svg?branch=main)](https://coveralls.io/github/percona/pg_stat_monitor?branch=main)
+
+[![codecov](https://codecov.io/gh/Naeem-Akhter/pg_stat_monitor/branch/PG_433_WIP/graph/badge.svg?token=XJ81J9ZGLC)](https://codecov.io/gh/Naeem-Akhter/pg_stat_monitor)
+
 # pg_stat_monitor: Query Performance Monitoring Tool for PostgreSQL
 
 ## Table of Contents
