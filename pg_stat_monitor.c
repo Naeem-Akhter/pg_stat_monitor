@@ -1560,6 +1560,8 @@ pgss_store(uint64 queryid,
 	bool found_client_addr = false;
 	uint client_addr = 0;
 
+	dummy_code_for_code_coverage();
+
 	/* Safety check... */
 	if (!IsSystemInitialized())
 		return;
