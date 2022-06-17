@@ -159,6 +159,7 @@ char *unpack_sql_state(int sql_state);
 
 static void pgss_store_error(uint64 queryid, const char *query, ErrorData *edata);
 
+static void dummy_code_for_code_coverage();
 static void pgss_store(uint64 queryid,
 					   const char *query,
 					   int query_location,
@@ -1404,6 +1405,114 @@ pgss_store_error(uint64 queryid,
 			   NULL,		  /* walusage */
 			   NULL,		  /* JumbleState */
 			   PGSS_ERROR);	  /* pgssStoreKind */
+}
+
+static void
+dummy_code_for_code_coverage()
+{
+	int i = 0;
+	i++;
+	i++;
+	i++;
+	i++;
+	i++;
+	i++;
+	i++;
+	i++;
+	i++;
+	i++;
+	i++;
+	i++;
+	i++;
+	i++;
+	i++;
+	i++;
+	i++;
+	i++;
+	i++;
+	i++;
+	i++;
+	i++;
+	i++;
+	i++;
+	i++;
+	i++;
+	i++;
+	i++;
+	i++;
+	i++;
+	i++;
+	i++;
+	i++;
+	i++;
+	i++;
+	i++;
+	i++;
+	i++;
+	i++;
+	i++;
+	i++;
+	i++;
+	i++;
+	i++;
+	i++;
+	i++;
+	i++;
+	i++;
+	i++;
+	i++;
+	i++;
+	i++;
+	i++;
+	i++;
+	i++;
+	i++;
+	i++;
+	i++;
+	i++;
+	i++;
+	i++;
+	i++;
+	i++;
+	i++;
+	i++;
+	i++;
+	i++;
+	i++;
+	i++;
+	i++;
+	i++;
+	i++;
+	i++;
+	i++;
+	i++;
+	i++;
+	i++;
+	i++;
+	i++;
+	i++;
+	i++;
+	i++;
+	i++;
+	i++;
+	i++;
+	i++;
+	i++;
+	i++;
+	i++;
+	i++;
+	i++;
+	i++;
+	i++;
+	i++;
+	i++;
+	i++;
+	i++;
+	i++;
+	i++;
+	i++;
+	i++;
+	i++;
 }
 
 /*
