@@ -92,13 +92,19 @@ PGSM::append_to_file($stdout);
 ok($cmdret == 0, "Run run_pg_sleep(10) to generate data for histogram testing");
 PGSM::append_to_file($stdout);
 
-($cmdret, $stdout, $stderr) = $node->psql('postgres', 'SELECT bucket, queryid, query, calls, resp_calls FROM pg_stat_monitor ORDER BY calls;', extra_params => ['-a', '-Pformat=aligned','-Ptuples_only=off']);
+($cmdret, $stdout, $stderr) = $node->psql('postgres', 'SELECT bucket, queryid, query, calls, resp_calls FROM pg_stat_monitor ORDER BY calls desc;', extra_params => ['-a', '-Pformat=aligned','-Ptuples_only=off']);
 ok($cmdret == 0, "Print what is in pg_stat_monitor view");
 PGSM::append_to_file($stdout);
 
-($cmdret, $stdout, $stderr) = $node->psql('postgres', 'SELECT substr(query, 0,50) as query, calls, resp_calls FROM pg_stat_monitor ORDER BY calls;', extra_params => ['-a', '-Pformat=aligned','-Ptuples_only=off']);
-ok($cmdret == 0, "Print what is in pg_stat_monitor view");
-PGSM::append_to_file($stdout);
+($cmdret, $stdout, $stderr) = $node->psql('postgres', 'SELECT calls FROM pg_stat_monitor ORDER BY calls desc LIMIT 1;', extra_params => ['-a', '-Pformat=aligned','-Ptuples_only=on']);
+ok($cmdret == 0, "Get calls into a variable");
+my $calls_count = trim($stdout);
+PGSM::append_to_file($calls_count);
+
+($cmdret, $stdout, $stderr) = $node->psql('postgres', 'SELECT resp_calls FROM pg_stat_monitor ORDER BY calls desc LIMIT 1;', extra_params => ['-a', '-Pformat=aligned','-Ptuples_only=on']);
+ok($cmdret == 0, "Get resp_calls into a variable");
+my $resp_calls = trim($stdout);
+PGSM::append_to_file($resp_calls);
 
 ($cmdret, $stdout, $stderr) = $node->psql('postgres', 'SELECT * from generate_histogram();', extra_params => ['-a', '-Pformat=aligned','-Ptuples_only=off']);
 ok($cmdret == 0, "Generate Histogram for pg_sleep");
