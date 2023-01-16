@@ -20,7 +20,7 @@ my $pgdata = $node->data_dir;
 # UPDATE postgresql.conf to include/load pg_stat_monitor library
 open my $conf, '>>', "$pgdata/postgresql.conf";
 print $conf "shared_preload_libraries = 'pg_stat_monitor'\n";
-print $conf "pg_stat_monitor.pgsm_bucket_time = 300\n";
+print $conf "pg_stat_monitor.pgsm_bucket_time = 360000\n";
 print $conf "pg_stat_monitor.pgsm_query_shared_buffer = 1\n";
 print $conf "pg_stat_monitor.pgsm_normalized_query = 'yes'\n";
 close $conf;

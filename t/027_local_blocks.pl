@@ -25,7 +25,7 @@ my $pgdata = $node->data_dir;
 # UPDATE postgresql.conf to include/load pg_stat_monitor library
 $node->append_conf('postgresql.conf', "shared_preload_libraries = 'pg_stat_monitor'");
 # Set bucket duration to 3600 seconds so bucket doesn't change.
-$node->append_conf('postgresql.conf', "pg_stat_monitor.pgsm_bucket_time = 1800");
+$node->append_conf('postgresql.conf', "pg_stat_monitor.pgsm_bucket_time = 36000");
 $node->append_conf('postgresql.conf', "track_io_timing = on");
 $node->append_conf('postgresql.conf', "pg_stat_monitor.pgsm_track_utility = no");
 $node->append_conf('postgresql.conf', "pg_stat_monitor.pgsm_normalized_query = yes");

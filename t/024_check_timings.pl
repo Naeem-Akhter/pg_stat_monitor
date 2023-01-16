@@ -27,7 +27,7 @@ my $pgdata = $node->data_dir;
 $node->append_conf('postgresql.conf', "shared_preload_libraries = 'pg_stat_statements,pg_stat_monitor'");
 # Set bucket duration to 3600 seconds so bucket doesn't change.
 $node->append_conf('postgresql.conf', "pg_stat_statements.track_utility = off");
-$node->append_conf('postgresql.conf', "pg_stat_monitor.pgsm_bucket_time = 1800");
+$node->append_conf('postgresql.conf', "pg_stat_monitor.pgsm_bucket_time = 360000");
 $node->append_conf('postgresql.conf', "track_io_timing = on");
 $node->append_conf('postgresql.conf', "pg_stat_monitor.pgsm_track_utility = no");
 $node->append_conf('postgresql.conf', "pg_stat_monitor.pgsm_normalized_query = yes"); 
@@ -67,10 +67,10 @@ PGSM::append_to_file($stdout);
 
 my $port = $node->port;
 
-my $out = system ("pgbench -i -s 100 -p $port postgres");
+my $out = system ("pgbench -i -s 10 -p $port postgres");
 ok($cmdret == 0, "Perform pgbench init");
 
-$out = system ("pgbench -c 10 -j 2 -t 10000 -p $port postgres");
+$out = system ("pgbench -c 10 -j 2 -t 1000 -p $port postgres");
 ok($cmdret == 0, "Run pgbench");
 
 ($cmdret, $stdout, $stderr) = $node->psql('postgres', "DELETE FROM pgbench_accounts WHERE aid % 9 = 1;", extra_params => ['-a', '-Pformat=aligned','-Ptuples_only=off']);
