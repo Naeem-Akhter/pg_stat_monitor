@@ -52,7 +52,7 @@ PGSM::append_to_file($stdout);
 my $port = $node->port;
 print "port $port \n";
 
-my $out = system ("pgbench -i -s 100 -p $port example");
+my $out = system ("pgbench -i -s 10 -p $port example");
 print " out: $out \n";
 ok($cmdret == 0, "Perform pgbench init");
 
@@ -65,7 +65,7 @@ print "cmdret $cmdret\n";
 ok($cmdret == 0, "SELECT XXX FROM pg_stat_monitor");
 PGSM::append_to_file($stdout);
 
-$node->append_conf('postgresql.conf', "pg_stat_monitor.pgsm_query_shared_buffer = 100\n");
+$node->append_conf('postgresql.conf', "pg_stat_monitor.pgsm_query_shared_buffer = 2\n");
 $node->restart();
 
 ($cmdret, $stdout, $stderr) = $node->psql('postgres', 'SELECT pg_stat_monitor_reset();', extra_params => ['-a', '-Pformat=aligned','-Ptuples_only=off']);
@@ -76,7 +76,7 @@ PGSM::append_to_file($stdout);
 ok($cmdret == 0, "Print PGSM EXTENSION Settings");
 PGSM::append_to_file($stdout);
 
-$out = system ("pgbench -i -s 100 -p $port example");
+$out = system ("pgbench -i -s 10 -p $port example");
 print " out: $out \n";
 ok($cmdret == 0, "Perform pgbench init");
 
@@ -100,7 +100,7 @@ PGSM::append_to_file($stdout);
 ok($cmdret == 0, "Print PGSM EXTENSION Settings");
 PGSM::append_to_file($stdout);
 
-$out = system ("pgbench -i -s 100 -p $port example");
+$out = system ("pgbench -i -s 10 -p $port example");
 print " out: $out \n";
 ok($cmdret == 0, "Perform pgbench init");
 
