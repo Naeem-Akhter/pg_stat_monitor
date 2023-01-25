@@ -156,19 +156,19 @@ PGSM::append_to_file($stdout);
 generate_histogram_with_configurations(1, 10000, 3, 24, "{1,14,4,5,0}", 5, 1);
 
 #Scenario 2
-generate_histogram_with_configurations(20, 40, 20, 3, "{2,0,0,0,0,0,0,0,0,0}", 10, 0);
+generate_histogram_with_configurations(20, 40, 20, 2, "{2,0,0,0,0,0,0,0,0,0}", 10, 0);
 
 #Scenario 3
-generate_histogram_with_configurations(1000, 1010, 6, 3, "{2,0,0,0,0,0,0,0}", 8, 0);
+generate_histogram_with_configurations(1000, 1010, 6, 2, "{2,0,0,0,0,0,0,0}", 8, 0);
 
 #Scenario 4
-generate_histogram_with_configurations(0, 2147483647, 20, 3, "{2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0}", 21, 0);
+generate_histogram_with_configurations(0, 2147483647, 20, 2, "{2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0}", 21, 0);
 
 #Scenario 5
-generate_histogram_with_configurations(1, 10, 3, 3, "{2,0,0,0,0}", 5, 0);
+generate_histogram_with_configurations(1, 10, 3, 2, "{2,0,0,0,0}", 5, 0);
 
 #Scenario 6
-generate_histogram_with_configurations(0, 2, 2, 3, "{2,0,0}", 3, 0);
+generate_histogram_with_configurations(0, 2, 2, 2, "{2,0,0}", 3, 0);
 
 # Drop extension
 $stdout = $node->safe_psql('postgres', 'Drop extension pg_stat_monitor;',  extra_params => ['-a']);
