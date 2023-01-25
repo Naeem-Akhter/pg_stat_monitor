@@ -49,14 +49,77 @@ BEGIN
 END;
 \$\$ LANGUAGE plpgsql;";
 
+sub generate_histogram_with_configurations
+{
+   PGSM::append_to_file("\n\n===============Start===============");
+
+   my ($h_min, $h_max, $h_buckets, $expected_calls_count, $expected_resp_calls, $expected_histogram_rows, $use_pg_sleep) = @_;
+   PGSM::append_to_file("pgsm_histogram_min : " . $h_min);
+   PGSM::append_to_file("pgsm_histogram_max : " . $h_max);
+   PGSM::append_to_file("pgsm_histogram_buckets : " . $h_buckets);
+   PGSM::append_to_file("expected total calls count : " . $expected_calls_count);
+   PGSM::append_to_file("expected resp_calls value : " . $expected_resp_calls);
+   PGSM::append_to_file("expected ranges (rows) count in histogram: " . $expected_histogram_rows);
+   PGSM::append_to_file("using pg_sleep to generate dataset : " . $use_pg_sleep);
+
+   $node->append_conf('postgresql.conf', "pg_stat_monitor.pgsm_histogram_min = $h_min");
+   $node->append_conf('postgresql.conf', "pg_stat_monitor.pgsm_histogram_max = $h_max");
+   $node->append_conf('postgresql.conf', "pg_stat_monitor.pgsm_histogram_buckets = $h_buckets");
+   $node->restart();
+
+   my ($cmdret, $stdout, $stderr) = $node->psql('postgres', "SELECT name, setting, unit, context, vartype, source, min_val, max_val, enumvals, boot_val, reset_val, pending_restart FROM pg_settings WHERE name LIKE '%pg_stat_monitor%';", extra_params => ['-a', '-Pformat=aligned','-Ptuples_only=off']);
+   ok($cmdret == 0, "Print PGSM EXTENSION Settings");
+   PGSM::append_to_file($stdout);
+
+   ($cmdret, $stdout, $stderr) = $node->psql('postgres', 'SELECT pg_stat_monitor_reset();', extra_params => ['-a', '-Pformat=aligned','-Ptuples_only=off']);
+   ok($cmdret == 0, "Reset PGSM Extension");
+   PGSM::append_to_file($stdout);
+
+   if($use_pg_sleep == 1)
+   {
+      ($cmdret, $stdout, $stderr) = $node->psql('postgres', 'SELECT run_pg_sleep(10);', extra_params => ['-a', '-Pformat=aligned','-Ptuples_only=off']);
+      ok($cmdret == 0, "Run run_pg_sleep(10) to generate data for histogram testing");
+      PGSM::append_to_file($stdout);
+   }
+   else
+   {
+      for (my $count = 1 ; $count <= $expected_calls_count ; $count++)
+      {
+         ($cmdret, $stdout, $stderr) = $node->psql('postgres', 'SELECT 1 AS a;', extra_params => ['-a', '-Pformat=aligned','-Ptuples_only=off']);
+         ok($cmdret == 0, "SELECT 1 AS a");
+         PGSM::append_to_file($stdout);
+      }
+   }
+
+   ($cmdret, $stdout, $stderr) = $node->psql('postgres', 'SELECT bucket, queryid, query, calls, resp_calls FROM pg_stat_monitor ORDER BY calls desc;', extra_params => ['-a', '-Pformat=aligned','-Ptuples_only=off']);
+   ok($cmdret == 0, "Print what is in pg_stat_monitor view");
+   PGSM::append_to_file($stdout);
+
+   ($cmdret, $stdout, $stderr) = $node->psql('postgres', 'SELECT calls FROM pg_stat_monitor ORDER BY calls desc LIMIT 1;', extra_params => ['-Pformat=unaligned','-Ptuples_only=on']);
+   ok($cmdret == 0, "Get calls into a variable");
+   ok($stdout == $expected_calls_count, "Calls are $expected_calls_count");
+   my $calls_count = trim($stdout);
+   PGSM::append_to_file("Got Calls from query : " . $stdout);
+
+   ($cmdret, $stdout, $stderr) = $node->psql('postgres', 'SELECT resp_calls FROM pg_stat_monitor ORDER BY calls desc LIMIT 1;', extra_params => ['-Pformat=aligned','-Ptuples_only=on']);
+   ok($cmdret == 0, "Get resp_calls into a variable");
+   ok(trim($stdout) eq "$expected_resp_calls", "resp_calls is $expected_resp_calls");
+   my $resp_calls = trim($stdout);
+   PGSM::append_to_file("Got resp_calls from query : " . $stdout);
+
+   ($cmdret, $stdout, $stderr) = $node->psql('postgres', 'SELECT * from generate_histogram();', extra_params => ['-a', '-Pformat=aligned','-Ptuples_only=off']);
+   ok($cmdret == 0, "Generate Histogram for Select 1");
+   PGSM::append_to_file($stdout);
+   like($stdout, qr/$expected_histogram_rows rows/, "$expected_histogram_rows rows are present in histogram output");
+
+   PGSM::append_to_file("===============End===============");
+}
+
 # Update postgresql.conf to include/load pg_stat_monitor library   
 $node->append_conf('postgresql.conf', "shared_preload_libraries = 'pg_stat_monitor'");
 
 # Set change postgresql.conf for this test case. 
 $node->append_conf('postgresql.conf', "pg_stat_monitor.pgsm_bucket_time = 1800");
-$node->append_conf('postgresql.conf', "pg_stat_monitor.pgsm_histogram_min = 1");
-$node->append_conf('postgresql.conf', "pg_stat_monitor.pgsm_histogram_max = 10000");
-$node->append_conf('postgresql.conf', "pg_stat_monitor.pgsm_histogram_buckets = 3");
 $node->append_conf('postgresql.conf', "pg_stat_monitor.pgsm_normalized_query = yes");
 $node->append_conf('postgresql.conf', "pg_stat_monitor.pgsm_track = 'all'");
 
@@ -64,9 +127,7 @@ $node->append_conf('postgresql.conf', "pg_stat_monitor.pgsm_track = 'all'");
 my $rt_value = $node->start;
 ok($rt_value == 1, "Start Server");
 
-# Scenario 1. Run pg_sleep 
 # Create functions required for testing
-PGSM::append_to_file("==================Scenario 1==================");
 my ($cmdret, $stdout, $stderr) = $node->psql('postgres', "$run_pg_sleep_function_sql", extra_params => ['-a']);
 ok($cmdret == 0, "Create run_pg_sleep(INTEGER) function");
 PGSM::append_to_file($stdout);
@@ -80,282 +141,34 @@ PGSM::append_to_file($stdout);
 ok($cmdret == 0, "Create PGSM Extension");
 PGSM::append_to_file($stdout);
 
-($cmdret, $stdout, $stderr) = $node->psql('postgres', "SELECT name, setting, unit, context, vartype, source, min_val, max_val, enumvals, boot_val, reset_val, pending_restart FROM pg_settings WHERE name LIKE '%pg_stat_monitor%';", extra_params => ['-a', '-Pformat=aligned','-Ptuples_only=off']);
-ok($cmdret == 0, "Print PGSM EXTENSION Settings");
-PGSM::append_to_file($stdout);
+# Following parameters are required for function 'generate_histogram_with_configurations' to generate and test a histogram
+# with given configuration. 
+# Parameter 1 ==> pgsm_histogram_min
+# Parameter 2 ==> pgsm_histogram_max
+# Parameter 3 ==> pgsm_histogram_buckets
+# Parameter 4 ==> generated and expected total calls count against 'SELECT 1 AS a' 
+# Parameter 5 ==> expected resp_calls value output
+# Parameter 6 ==> expected ranges (rows) count in histogram output
+# Parameter 7 ==> using pg_sleep to generate dataset, '1' will call sql function 'run_pg_sleep' (declared above).
+#                 '0' will call the 'SELECT 1 AS a' expected_total_calls (Parameter 4) times. 
 
-($cmdret, $stdout, $stderr) = $node->psql('postgres', 'SELECT pg_stat_monitor_reset();', extra_params => ['-a', '-Pformat=aligned','-Ptuples_only=off']);
-ok($cmdret == 0, "Reset PGSM Extension");
-PGSM::append_to_file($stdout);
-
-($cmdret, $stdout, $stderr) = $node->psql('postgres', 'SELECT run_pg_sleep(10);', extra_params => ['-a', '-Pformat=aligned','-Ptuples_only=off']);
-ok($cmdret == 0, "Run run_pg_sleep(10) to generate data for histogram testing");
-PGSM::append_to_file($stdout);
-
-($cmdret, $stdout, $stderr) = $node->psql('postgres', 'SELECT query, calls, resp_calls FROM pg_stat_monitor ORDER BY calls desc;', extra_params => ['-a', '-Pformat=aligned','-Ptuples_only=off']);
-ok($cmdret == 0, "Print what is in pg_stat_monitor view");
-PGSM::append_to_file($stdout);
-
-($cmdret, $stdout, $stderr) = $node->psql('postgres', 'SELECT bucket, queryid, query, calls, resp_calls FROM pg_stat_monitor ORDER BY calls desc;', extra_params => ['-a', '-Pformat=aligned','-Ptuples_only=off']);
-ok($cmdret == 0, "Print what is in pg_stat_monitor view");
-PGSM::append_to_file($stdout);
-
-($cmdret, $stdout, $stderr) = $node->psql('postgres', 'SELECT calls FROM pg_stat_monitor ORDER BY calls desc LIMIT 1;', extra_params => ['-Pformat=unaligned','-Ptuples_only=on']);
-ok($cmdret == 0, "Get calls into a variable");
-ok($stdout == 24, "Calls are 24");
-my $calls_count = trim($stdout);
-PGSM::append_to_file("Got Calls from query : " . $stdout);
-
-($cmdret, $stdout, $stderr) = $node->psql('postgres', 'SELECT resp_calls FROM pg_stat_monitor ORDER BY calls desc LIMIT 1;', extra_params => ['-Pformat=aligned','-Ptuples_only=on']);
-ok($cmdret == 0, "Get resp_calls into a variable");
-ok(trim($stdout) eq "{1,14,4,5,0}", "resp_calls is {1,14,4,5,0}");
-my $resp_calls = trim($stdout);
-PGSM::append_to_file("Got resp_calls from query : " . $stdout);
-
-($cmdret, $stdout, $stderr) = $node->psql('postgres', 'SELECT * from generate_histogram();', extra_params => ['-a', '-Pformat=aligned','-Ptuples_only=off']);
-ok($cmdret == 0, "Generate Histogram for pg_sleep");
-PGSM::append_to_file($stdout);
-like($stdout, qr/5 rows/, '5 rows are present in histogram output');
+# Scenario 1. Run pg_sleep 
+generate_histogram_with_configurations(1, 10000, 3, 24, "{1,14,4,5,0}", 5, 1);
 
 #Scenario 2
-PGSM::append_to_file("\n\n==================Scenario 2==================");
-$node->append_conf('postgresql.conf', "pg_stat_monitor.pgsm_histogram_min = 20");
-$node->append_conf('postgresql.conf', "pg_stat_monitor.pgsm_histogram_max = 40");
-$node->append_conf('postgresql.conf', "pg_stat_monitor.pgsm_histogram_buckets = 20");
-$node->restart();
-
-($cmdret, $stdout, $stderr) = $node->psql('postgres', "SELECT name, setting, unit, context, vartype, source, min_val, max_val, enumvals, boot_val, reset_val, pending_restart FROM pg_settings WHERE name LIKE '%pg_stat_monitor%';", extra_params => ['-a', '-Pformat=aligned','-Ptuples_only=off']);
-ok($cmdret == 0, "Print PGSM EXTENSION Settings");
-PGSM::append_to_file($stdout);
-
-($cmdret, $stdout, $stderr) = $node->psql('postgres', 'SELECT pg_stat_monitor_reset();', extra_params => ['-a', '-Pformat=aligned','-Ptuples_only=off']);
-ok($cmdret == 0, "Reset PGSM Extension");
-PGSM::append_to_file($stdout);
-
-($cmdret, $stdout, $stderr) = $node->psql('postgres', 'SELECT 1 AS a;', extra_params => ['-a', '-Pformat=aligned','-Ptuples_only=off']);
-ok($cmdret == 0, "Select 1");
-PGSM::append_to_file($stdout);
-
-($cmdret, $stdout, $stderr) = $node->psql('postgres', 'SELECT 1 AS a;', extra_params => ['-a', '-Pformat=aligned','-Ptuples_only=off']);
-ok($cmdret == 0, "Select 1");
-PGSM::append_to_file($stdout);
-
-($cmdret, $stdout, $stderr) = $node->psql('postgres', 'SELECT query, calls, resp_calls FROM pg_stat_monitor ORDER BY calls desc;', extra_params => ['-a', '-Pformat=aligned','-Ptuples_only=off']);
-ok($cmdret == 0, "Print what is in pg_stat_monitor view");
-PGSM::append_to_file($stdout);
-
-($cmdret, $stdout, $stderr) = $node->psql('postgres', 'SELECT bucket, queryid, query, calls, resp_calls FROM pg_stat_monitor ORDER BY calls desc;', extra_params => ['-a', '-Pformat=aligned','-Ptuples_only=off']);
-ok($cmdret == 0, "Print what is in pg_stat_monitor view");
-PGSM::append_to_file($stdout);
-
-($cmdret, $stdout, $stderr) = $node->psql('postgres', 'SELECT calls FROM pg_stat_monitor ORDER BY calls desc LIMIT 1;', extra_params => ['-Pformat=unaligned','-Ptuples_only=on']);
-ok($cmdret == 0, "Get calls into a variable");
-ok($stdout == 2, "Calls are 2");
-$calls_count = trim($stdout);
-PGSM::append_to_file("Got Calls from query : " . $stdout);
-
-($cmdret, $stdout, $stderr) = $node->psql('postgres', 'SELECT resp_calls FROM pg_stat_monitor ORDER BY calls desc LIMIT 1;', extra_params => ['-Pformat=aligned','-Ptuples_only=on']);
-ok($cmdret == 0, "Get resp_calls into a variable");
-ok(trim($stdout) eq "{2,0,0,0,0,0,0,0,0,0}", "resp_calls is {2,0,0,0,0,0,0,0,0,0}");
-$resp_calls = trim($stdout);
-PGSM::append_to_file("Got resp_calls from query : " . $stdout);
-
-($cmdret, $stdout, $stderr) = $node->psql('postgres', 'SELECT * from generate_histogram();', extra_params => ['-a', '-Pformat=aligned','-Ptuples_only=off']);
-ok($cmdret == 0, "Generate Histogram for Select 1");
-PGSM::append_to_file($stdout);
-like($stdout, qr/10 rows/, '5 rows are present in histogram output');
+generate_histogram_with_configurations(20, 40, 20, 3, "{2,0,0,0,0,0,0,0,0,0}", 10, 0);
 
 #Scenario 3
-PGSM::append_to_file("\n\n==================Scenario 3==================");
-$node->append_conf('postgresql.conf', "pg_stat_monitor.pgsm_histogram_min = 1000");
-$node->append_conf('postgresql.conf', "pg_stat_monitor.pgsm_histogram_max = 1010");
-$node->append_conf('postgresql.conf', "pg_stat_monitor.pgsm_histogram_buckets = 6");
-$node->restart();
-
-($cmdret, $stdout, $stderr) = $node->psql('postgres', "SELECT name, setting, unit, context, vartype, source, min_val, max_val, enumvals, boot_val, reset_val, pending_restart FROM pg_settings WHERE name LIKE '%pg_stat_monitor%';", extra_params => ['-a', '-Pformat=aligned','-Ptuples_only=off']);
-ok($cmdret == 0, "Print PGSM EXTENSION Settings");
-PGSM::append_to_file($stdout);
-
-($cmdret, $stdout, $stderr) = $node->psql('postgres', 'SELECT pg_stat_monitor_reset();', extra_params => ['-a', '-Pformat=aligned','-Ptuples_only=off']);
-ok($cmdret == 0, "Reset PGSM Extension");
-PGSM::append_to_file($stdout);
-
-($cmdret, $stdout, $stderr) = $node->psql('postgres', 'SELECT 1 AS a;', extra_params => ['-a', '-Pformat=aligned','-Ptuples_only=off']);
-ok($cmdret == 0, "Select 1");
-PGSM::append_to_file($stdout);
-
-($cmdret, $stdout, $stderr) = $node->psql('postgres', 'SELECT 1 AS a;', extra_params => ['-a', '-Pformat=aligned','-Ptuples_only=off']);
-ok($cmdret == 0, "Select 1");
-PGSM::append_to_file($stdout);
-
-($cmdret, $stdout, $stderr) = $node->psql('postgres', 'SELECT query, calls, resp_calls FROM pg_stat_monitor ORDER BY calls desc;', extra_params => ['-a', '-Pformat=aligned','-Ptuples_only=off']);
-ok($cmdret == 0, "Print what is in pg_stat_monitor view");
-PGSM::append_to_file($stdout);
-
-($cmdret, $stdout, $stderr) = $node->psql('postgres', 'SELECT bucket, queryid, query, calls, resp_calls FROM pg_stat_monitor ORDER BY calls desc;', extra_params => ['-a', '-Pformat=aligned','-Ptuples_only=off']);
-ok($cmdret == 0, "Print what is in pg_stat_monitor view");
-PGSM::append_to_file($stdout);
-
-($cmdret, $stdout, $stderr) = $node->psql('postgres', 'SELECT calls FROM pg_stat_monitor ORDER BY calls desc LIMIT 1;', extra_params => ['-Pformat=unaligned','-Ptuples_only=on']);
-ok($cmdret == 0, "Get calls into a variable");
-ok($stdout == 2, "Calls are 2");
-$calls_count = trim($stdout);
-PGSM::append_to_file("Got Calls from query : " . $stdout);
-
-($cmdret, $stdout, $stderr) = $node->psql('postgres', 'SELECT resp_calls FROM pg_stat_monitor ORDER BY calls desc LIMIT 1;', extra_params => ['-Pformat=aligned','-Ptuples_only=on']);
-ok($cmdret == 0, "Get resp_calls into a variable");
-ok(trim($stdout) eq "{2,0,0,0,0,0,0,0}", "resp_calls is {2,0,0,0,0,0,0,0}");
-$resp_calls = trim($stdout);
-PGSM::append_to_file("Got resp_calls from query : " . $stdout);
-
-($cmdret, $stdout, $stderr) = $node->psql('postgres', 'SELECT * from generate_histogram();', extra_params => ['-a', '-Pformat=aligned','-Ptuples_only=off']);
-ok($cmdret == 0, "Generate Histogram for Select 1");
-PGSM::append_to_file($stdout);
-like($stdout, qr/8 rows/, '5 rows are present in histogram output');
+generate_histogram_with_configurations(1000, 1010, 6, 3, "{2,0,0,0,0,0,0,0}", 8, 0);
 
 #Scenario 4
-PGSM::append_to_file("\n\n==================Scenario 4==================");
-$node->append_conf('postgresql.conf', "pg_stat_monitor.pgsm_histogram_min = 0");
-$node->append_conf('postgresql.conf', "pg_stat_monitor.pgsm_histogram_max = 2147483647");
-$node->append_conf('postgresql.conf', "pg_stat_monitor.pgsm_histogram_buckets = 20");
-$node->restart();
-
-($cmdret, $stdout, $stderr) = $node->psql('postgres', "SELECT name, setting, unit, context, vartype, source, min_val, max_val, enumvals, boot_val, reset_val, pending_restart FROM pg_settings WHERE name LIKE '%pg_stat_monitor%';", extra_params => ['-a', '-Pformat=aligned','-Ptuples_only=off']);
-ok($cmdret == 0, "Print PGSM EXTENSION Settings");
-PGSM::append_to_file($stdout);
-
-($cmdret, $stdout, $stderr) = $node->psql('postgres', 'SELECT pg_stat_monitor_reset();', extra_params => ['-a', '-Pformat=aligned','-Ptuples_only=off']);
-ok($cmdret == 0, "Reset PGSM Extension");
-PGSM::append_to_file($stdout);
-
-($cmdret, $stdout, $stderr) = $node->psql('postgres', 'SELECT 1 AS a;', extra_params => ['-a', '-Pformat=aligned','-Ptuples_only=off']);
-ok($cmdret == 0, "Select 1");
-PGSM::append_to_file($stdout);
-
-($cmdret, $stdout, $stderr) = $node->psql('postgres', 'SELECT 1 AS a;', extra_params => ['-a', '-Pformat=aligned','-Ptuples_only=off']);
-ok($cmdret == 0, "Select 1");
-PGSM::append_to_file($stdout);
-
-($cmdret, $stdout, $stderr) = $node->psql('postgres', 'SELECT query, calls, resp_calls FROM pg_stat_monitor ORDER BY calls desc;', extra_params => ['-a', '-Pformat=aligned','-Ptuples_only=off']);
-ok($cmdret == 0, "Print what is in pg_stat_monitor view");
-PGSM::append_to_file($stdout);
-
-($cmdret, $stdout, $stderr) = $node->psql('postgres', 'SELECT bucket, queryid, query, calls, resp_calls FROM pg_stat_monitor ORDER BY calls desc;', extra_params => ['-a', '-Pformat=aligned','-Ptuples_only=off']);
-ok($cmdret == 0, "Print what is in pg_stat_monitor view");
-PGSM::append_to_file($stdout);
-
-($cmdret, $stdout, $stderr) = $node->psql('postgres', 'SELECT calls FROM pg_stat_monitor ORDER BY calls desc LIMIT 1;', extra_params => ['-Pformat=unaligned','-Ptuples_only=on']);
-ok($cmdret == 0, "Get calls into a variable");
-ok($stdout == 2, "Calls are 2");
-$calls_count = trim($stdout);
-PGSM::append_to_file("Got Calls from query : " . $stdout);
-
-($cmdret, $stdout, $stderr) = $node->psql('postgres', 'SELECT resp_calls FROM pg_stat_monitor ORDER BY calls desc LIMIT 1;', extra_params => ['-Pformat=aligned','-Ptuples_only=on']);
-ok($cmdret == 0, "Get resp_calls into a variable");
-ok(trim($stdout) eq "{2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0}", "resp_calls is {2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0}");
-$resp_calls = trim($stdout);
-PGSM::append_to_file("Got resp_calls from query : " . $stdout);
-
-($cmdret, $stdout, $stderr) = $node->psql('postgres', 'SELECT * from generate_histogram();', extra_params => ['-a', '-Pformat=aligned','-Ptuples_only=off']);
-ok($cmdret == 0, "Generate Histogram for Select 1");
-PGSM::append_to_file($stdout);
-like($stdout, qr/21 rows/, '5 rows are present in histogram output');
+generate_histogram_with_configurations(0, 2147483647, 20, 3, "{2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0}", 21, 0);
 
 #Scenario 5
-PGSM::append_to_file("\n\n==================Scenario 5==================");
-$node->append_conf('postgresql.conf', "pg_stat_monitor.pgsm_histogram_min = 1");
-$node->append_conf('postgresql.conf', "pg_stat_monitor.pgsm_histogram_max = 10");
-$node->append_conf('postgresql.conf', "pg_stat_monitor.pgsm_histogram_buckets = 3");
-$node->restart();
-
-($cmdret, $stdout, $stderr) = $node->psql('postgres', "SELECT name, setting, unit, context, vartype, source, min_val, max_val, enumvals, boot_val, reset_val, pending_restart FROM pg_settings WHERE name LIKE '%pg_stat_monitor%';", extra_params => ['-a', '-Pformat=aligned','-Ptuples_only=off']);
-ok($cmdret == 0, "Print PGSM EXTENSION Settings");
-PGSM::append_to_file($stdout);
-
-($cmdret, $stdout, $stderr) = $node->psql('postgres', 'SELECT pg_stat_monitor_reset();', extra_params => ['-a', '-Pformat=aligned','-Ptuples_only=off']);
-ok($cmdret == 0, "Reset PGSM Extension");
-PGSM::append_to_file($stdout);
-
-($cmdret, $stdout, $stderr) = $node->psql('postgres', 'SELECT 1 AS a;', extra_params => ['-a', '-Pformat=aligned','-Ptuples_only=off']);
-ok($cmdret == 0, "Select 1");
-PGSM::append_to_file($stdout);
-
-($cmdret, $stdout, $stderr) = $node->psql('postgres', 'SELECT 1 AS a;', extra_params => ['-a', '-Pformat=aligned','-Ptuples_only=off']);
-ok($cmdret == 0, "Select 1");
-PGSM::append_to_file($stdout);
-
-($cmdret, $stdout, $stderr) = $node->psql('postgres', 'SELECT query, calls, resp_calls FROM pg_stat_monitor ORDER BY calls desc;', extra_params => ['-a', '-Pformat=aligned','-Ptuples_only=off']);
-ok($cmdret == 0, "Print what is in pg_stat_monitor view");
-PGSM::append_to_file($stdout);
-
-($cmdret, $stdout, $stderr) = $node->psql('postgres', 'SELECT bucket, queryid, query, calls, resp_calls FROM pg_stat_monitor ORDER BY calls desc;', extra_params => ['-a', '-Pformat=aligned','-Ptuples_only=off']);
-ok($cmdret == 0, "Print what is in pg_stat_monitor view");
-PGSM::append_to_file($stdout);
-
-($cmdret, $stdout, $stderr) = $node->psql('postgres', 'SELECT calls FROM pg_stat_monitor ORDER BY calls desc LIMIT 1;', extra_params => ['-Pformat=unaligned','-Ptuples_only=on']);
-ok($cmdret == 0, "Get calls into a variable");
-ok($stdout == 2, "Calls are 2");
-$calls_count = trim($stdout);
-PGSM::append_to_file("Got Calls from query : " . $stdout);
-
-($cmdret, $stdout, $stderr) = $node->psql('postgres', 'SELECT resp_calls FROM pg_stat_monitor ORDER BY calls desc LIMIT 1;', extra_params => ['-Pformat=aligned','-Ptuples_only=on']);
-ok($cmdret == 0, "Get resp_calls into a variable");
-ok(trim($stdout) eq "{2,0,0,0,0}", "resp_calls is {2,0,0,0,0}");
-$resp_calls = trim($stdout);
-PGSM::append_to_file("Got resp_calls from query : " . $stdout);
-
-($cmdret, $stdout, $stderr) = $node->psql('postgres', 'SELECT * from generate_histogram();', extra_params => ['-a', '-Pformat=aligned','-Ptuples_only=off']);
-ok($cmdret == 0, "Generate Histogram for Select 1");
-PGSM::append_to_file($stdout);
-like($stdout, qr/5 rows/, '5 rows are present in histogram output');
+generate_histogram_with_configurations(1, 10, 3, 3, "{2,0,0,0,0}", 5, 0);
 
 #Scenario 6
-PGSM::append_to_file("\n\n==================Scenario 6==================");
-$node->append_conf('postgresql.conf', "pg_stat_monitor.pgsm_histogram_min = 0");
-$node->append_conf('postgresql.conf', "pg_stat_monitor.pgsm_histogram_max = 2");
-$node->append_conf('postgresql.conf', "pg_stat_monitor.pgsm_histogram_buckets = 2");
-$node->restart();
-
-($cmdret, $stdout, $stderr) = $node->psql('postgres', "SELECT name, setting, unit, context, vartype, source, min_val, max_val, enumvals, boot_val, reset_val, pending_restart FROM pg_settings WHERE name LIKE '%pg_stat_monitor%';", extra_params => ['-a', '-Pformat=aligned','-Ptuples_only=off']);
-ok($cmdret == 0, "Print PGSM EXTENSION Settings");
-PGSM::append_to_file($stdout);
-
-($cmdret, $stdout, $stderr) = $node->psql('postgres', 'SELECT pg_stat_monitor_reset();', extra_params => ['-a', '-Pformat=aligned','-Ptuples_only=off']);
-ok($cmdret == 0, "Reset PGSM Extension");
-PGSM::append_to_file($stdout);
-
-($cmdret, $stdout, $stderr) = $node->psql('postgres', 'SELECT 1 AS a;', extra_params => ['-a', '-Pformat=aligned','-Ptuples_only=off']);
-ok($cmdret == 0, "Select 1");
-PGSM::append_to_file($stdout);
-
-($cmdret, $stdout, $stderr) = $node->psql('postgres', 'SELECT 1 AS a;', extra_params => ['-a', '-Pformat=aligned','-Ptuples_only=off']);
-ok($cmdret == 0, "Select 1");
-PGSM::append_to_file($stdout);
-
-($cmdret, $stdout, $stderr) = $node->psql('postgres', 'SELECT query, calls, resp_calls FROM pg_stat_monitor ORDER BY calls desc;', extra_params => ['-a', '-Pformat=aligned','-Ptuples_only=off']);
-ok($cmdret == 0, "Print what is in pg_stat_monitor view");
-PGSM::append_to_file($stdout);
-
-($cmdret, $stdout, $stderr) = $node->psql('postgres', 'SELECT bucket, queryid, query, calls, resp_calls FROM pg_stat_monitor ORDER BY calls desc;', extra_params => ['-a', '-Pformat=aligned','-Ptuples_only=off']);
-ok($cmdret == 0, "Print what is in pg_stat_monitor view");
-PGSM::append_to_file($stdout);
-
-($cmdret, $stdout, $stderr) = $node->psql('postgres', 'SELECT calls FROM pg_stat_monitor ORDER BY calls desc LIMIT 1;', extra_params => ['-Pformat=unaligned','-Ptuples_only=on']);
-ok($cmdret == 0, "Get calls into a variable");
-ok($stdout == 2, "Calls are 2");
-$calls_count = trim($stdout);
-PGSM::append_to_file("Got Calls from query : " . $stdout);
-
-($cmdret, $stdout, $stderr) = $node->psql('postgres', 'SELECT resp_calls FROM pg_stat_monitor ORDER BY calls desc LIMIT 1;', extra_params => ['-Pformat=aligned','-Ptuples_only=on']);
-ok($cmdret == 0, "Get resp_calls into a variable");
-ok(trim($stdout) eq "{2,0,0}", "resp_calls is {2,0,0}");
-$resp_calls = trim($stdout);
-PGSM::append_to_file("Got resp_calls from query : " . $stdout);
-
-($cmdret, $stdout, $stderr) = $node->psql('postgres', 'SELECT * from generate_histogram();', extra_params => ['-a', '-Pformat=aligned','-Ptuples_only=off']);
-ok($cmdret == 0, "Generate Histogram for Select 1");
-PGSM::append_to_file($stdout);
-like($stdout, qr/3 rows/, '5 rows are present in histogram output');
+generate_histogram_with_configurations(0, 2, 2, 3, "{2,0,0}", 3, 0);
 
 # Drop extension
 $stdout = $node->safe_psql('postgres', 'Drop extension pg_stat_monitor;',  extra_params => ['-a']);
