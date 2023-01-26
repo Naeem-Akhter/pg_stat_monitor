@@ -19,14 +19,14 @@ my $pgdata = $node->data_dir;
 
 my $run_pg_sleep_function_sql = "CREATE OR REPLACE FUNCTION run_pg_sleep(INTEGER) RETURNS VOID AS \$\$
 DECLARE
-   iterator real := 0.000001;  -- we can init at declaration time
+   iterator real := 0.002;  -- we can init with 2 ms at declaration time
    loops ALIAS FOR \$1;
 BEGIN
    WHILE iterator < loops
    LOOP
       RAISE INFO 'Current timestamp: %', timeofday()::TIMESTAMP;
       RAISE INFO 'Sleep % seconds', iterator;
-	  PERFORM pg_sleep(iterator);
+	   PERFORM pg_sleep(iterator);
       iterator := iterator + iterator;
    END LOOP;
 END;
@@ -42,8 +42,6 @@ Declare
 BEGIN
     select bucket into bucket_id from pg_stat_monitor order by calls desc limit 1;
     select queryid into query_id from pg_stat_monitor order by calls desc limit 1;
-    --RAISE INFO 'bucket_id %', bucket_id;
-    --RAISE INFO 'query_id %', query_id;
     return query
     SELECT * FROM histogram(bucket_id, query_id) AS a(range TEXT, freq INT, bar TEXT);
 END;
@@ -153,10 +151,10 @@ PGSM::append_to_debug_file($stdout);
 # Parameter 6 ==> expected ranges (rows) count in histogram output
 # Parameter 7 ==> using pg_sleep to generate dataset, '1' will call sql function 'run_pg_sleep' (declared above).
 #                 '0' will call the 'SELECT 1 AS a' expected_total_calls (Parameter 4) times. 
-# Parameter 8 ==> Scenario number (placeholder to reflect in log for easy debugging)  
+# Parameter 8 ==> Scenario number (placeholder to reflect in log for debugging purposes)
 
 # Scenario 1. Run pg_sleep 
-generate_histogram_with_configurations(1, 10000, 3, 24, "{1,14,4,5,0}", 5, 1, 1);
+generate_histogram_with_configurations(1, 10000, 3, 13, "{0,4,4,5,0}", 5, 1, 1);
 
 #Scenario 2
 generate_histogram_with_configurations(20, 40, 20, 2, "{2,0,0,0,0,0,0,0,0,0}", 10, 0, 2);
