@@ -121,7 +121,7 @@ sub generate_histogram_with_configurations
 $node->append_conf('postgresql.conf', "shared_preload_libraries = 'pg_stat_monitor'");
 
 # Set change postgresql.conf for this test case. 
-$node->append_conf('postgresql.conf', "pg_stat_monitor.pgsm_bucket_time = 1800");
+$node->append_conf('postgresql.conf', "pg_stat_monitor.pgsm_bucket_time = 36000");
 $node->append_conf('postgresql.conf', "pg_stat_monitor.pgsm_normalized_query = yes");
 $node->append_conf('postgresql.conf', "pg_stat_monitor.pgsm_track = 'all'");
 
