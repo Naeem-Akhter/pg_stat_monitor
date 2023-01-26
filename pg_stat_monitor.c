@@ -63,8 +63,6 @@ do                                                      \
 
 /*---- Initicalization Function Declarations ----*/
 void		_PG_init(void);
-void		_PG_fini(void);
-
 
 /*---- Local variables ----*/
 
@@ -362,30 +360,6 @@ _PG_init(void)
 	nested_query_txts = (char **) malloc(sizeof(char*) * max_stack_depth);
 
 	system_init = true;
-}
-
-/*
- * Module unload callback
- */
-/*  cppcheck-suppress unusedFunction */
-void
-_PG_fini(void)
-{
-	system_init = false;
-	shmem_startup_hook = prev_shmem_startup_hook;
-	post_parse_analyze_hook = prev_post_parse_analyze_hook;
-	ExecutorStart_hook = prev_ExecutorStart;
-	ExecutorRun_hook = prev_ExecutorRun;
-	ExecutorFinish_hook = prev_ExecutorFinish;
-	ExecutorEnd_hook = prev_ExecutorEnd;
-	ProcessUtility_hook = prev_ProcessUtility;
-	emit_log_hook = prev_emit_log_hook;
-
-	free(nested_queryids);
-	free(nested_query_txts);
-	regfree(&preg_query_comments);
-
-	hash_entry_reset();
 }
 
 /*
