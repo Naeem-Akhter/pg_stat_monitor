@@ -34,7 +34,15 @@ SELECT pg_stat_monitor_reset();
 SET pg_stat_monitor.pgsm_track = 'all';
 SELECT run_pg_sleep(5);
 
-SELECT substr(query, 0, 50) as query, calls, resp_calls FROM pg_stat_monitor ORDER BY query COLLATE "C";
+-- pg_stat_monitor_reset() is excluded here: its own response time sits right
+-- on the boundary of the first (1ms-wide) histogram bucket, so on a loaded
+-- or slower CI runner it can non-deterministically fall in bucket 0 or 1.
+-- That's real timing variance in an incidental statement, not something
+-- this test is meant to assert on; the actual bucket-boundary logic is
+-- exercised deterministically below via generate_histogram().
+SELECT substr(query, 0, 50) as query, calls, resp_calls FROM pg_stat_monitor
+WHERE query NOT LIKE '%pg_stat_monitor_reset%'
+ORDER BY query COLLATE "C";
 
 SELECT * FROM generate_histogram();
 

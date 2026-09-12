@@ -13,10 +13,11 @@ PGSM::setup_files_dir(basename($0));
 # Create new PostgreSQL node and do initdb
 my $node = PGSM->pgsm_init_pg();
 
+my $bucket_time = 3;
 $node->append_conf(
 	'postgresql.conf', qq(
 shared_preload_libraries = 'pg_stat_monitor'
-pg_stat_monitor.pgsm_bucket_time = 3
+pg_stat_monitor.pgsm_bucket_time = $bucket_time
 pg_stat_monitor.pgsm_max_buckets = 3
 pg_stat_monitor.pgsm_normalized_query = on
 pg_stat_monitor.pgsm_track = 'all'
@@ -49,25 +50,24 @@ PGSM::append_to_debug_file($stdout);
 is($cmdret, 0, "Reset PGSM EXTENSION");
 PGSM::append_to_debug_file($stdout);
 
-($cmdret, $stdout, $stderr) = $node->psql(
-	'postgres',
-	'SELECT pg_sleep(3);',
-	extra_params => [ '-a', '-Pformat=aligned', '-Ptuples_only=off' ]);
-is($cmdret, 0, "1 - Run pg_sleep(3)");
-PGSM::append_to_debug_file($stdout);
+# Bucket rotation is decided lazily, by comparing the wall-clock epoch
+# second of each statement's completion against floor(epoch / bucket_time)
+# - it is not driven by a timer relative to when this test started. Without
+# synchronizing to a bucket boundary first, the number of rotations crossed
+# by the three pg_sleep(3) calls below depends on the random phase of
+# whatever second the test happened to start on, which made the
+# bucket_done counts below flaky. Wait for the start of a fresh bucket so
+# each pg_sleep(3) deterministically lands one bucket further than the
+# last.
+sleep($bucket_time - (time() % $bucket_time));
 
+# Run all three sleeps in a single session so connection/spawn overhead
+# between them can't eat into the bucket_time margin above.
 ($cmdret, $stdout, $stderr) = $node->psql(
 	'postgres',
-	'SELECT pg_sleep(3);',
+	'SELECT pg_sleep(3); SELECT pg_sleep(3); SELECT pg_sleep(3);',
 	extra_params => [ '-a', '-Pformat=aligned', '-Ptuples_only=off' ]);
-is($cmdret, 0, "2 - Run pg_sleep(3)");
-PGSM::append_to_debug_file($stdout);
-
-($cmdret, $stdout, $stderr) = $node->psql(
-	'postgres',
-	'SELECT pg_sleep(3);',
-	extra_params => [ '-a', '-Pformat=aligned', '-Ptuples_only=off' ]);
-is($cmdret, 0, "3 - Run pg_sleep(3)");
+is($cmdret, 0, "Run 3x pg_sleep(3)");
 PGSM::append_to_debug_file($stdout);
 
 ($cmdret, $stdout, $stderr) = $node->psql('postgres',
