@@ -23,12 +23,6 @@ END
 $$;
 -- Nothing of the above was recorded.
 SELECT count(*) FROM pg_stat_monitor;
--- If the count above is ever nonzero, this shows what leaked in: since
--- pg_stat_monitor's storage is instance-wide rather than scoped to this
--- session, any other concurrent backend that never set
--- compute_query_id = off (e.g. a background worker) can still add a row
--- here despite this session's own setting above.
-SELECT queryid, calls, datname, application_name, query FROM pg_stat_monitor;
 
 --
 -- Tracking resumes once query identifiers are computed again.
